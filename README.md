@@ -8,7 +8,7 @@
 Small durable checkpoint/resume runner for async state-machine loops built on
 top of `loom-tailcalls` and `flow-xray`. **Full stack overview:** [kroq86.github.io/loom-stack](https://kroq86.github.io/loom-stack/)
 
-**Official showcase:** [loom-run](https://github.com/kroq86/loom-run) — runnable demo wiring runner + flow-xray into a chat agent with supervisor and MCP.
+**Official showcases:** [loom-run](https://github.com/kroq86/loom-run) (dev chat + MCP) · [loom-ops](https://github.com/kroq86/loom-ops) (ops runbooks + HITL) — both wire runner + flow-xray; pick by domain.
 
 This is not a planner, memory system, graph DSL, hosted tracing product, or
 full agent SDK. It is the first slice of a Loom-based agent runtime: run a
@@ -26,7 +26,8 @@ Three composable packages for **long-running async agent loops**. Each does one 
 | **[loom-tailcalls](https://github.com/kroq86/loom-tailcalls)** | `pip install loom-tailcalls` | Write stack-safe transition loops (`@tailrec`, `@tailstream`) |
 | **[flow-xray](https://github.com/kroq86/flow-xray)** | `pip install flow-xray` | Export local HTML traces (LLM/tool calls, branches, errors) |
 | **[loom-runner](https://github.com/kroq86/loom-runner)** ← **this repo** | `pip install loom-runner` | Checkpoint/resume in SQLite; CLI inspect (`explain`, `history`, …) |
-| **[loom-run](https://github.com/kroq86/loom-run)** | `pip install -e .` (from source) | **Official showcase** — chat agent + supervisor on top of this runner |
+| **[loom-run](https://github.com/kroq86/loom-run)** | `pip install -e .` (from source) | **Dev showcase** — chat agent + supervisor on this runner |
+| **[loom-ops](https://github.com/kroq86/loom-ops)** | `pip install -e .` (from source) | **Ops product** — runbook agent + HITL on this runner |
 
 ```text
 @tailrec agent loop  →  loom-runner run/resume  →  --trace trace.html
