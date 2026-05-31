@@ -4,8 +4,27 @@ Small durable checkpoint/resume runner for async state-machine loops built on
 top of `loom-tailcalls` and `flow-xray`.
 
 This is not a planner, memory system, graph DSL, hosted tracing product, or
-full agent SDK. It keeps the public surface intentionally small: run a typed
-async step loop, checkpoint each state transition, and resume later.
+full agent SDK. It is the first slice of a Loom-based agent runtime: run a
+typed async transition loop, checkpoint each state transition, resume later,
+inspect history, and explain a run.
+
+Runtime transitions are logged as logical steps with attempt history. A retry
+does not create a new transition: for the same `run_id`, `step_index`, and
+stable input hash, the runner reuses the committed outcome. Transient errors
+are retryable by default; validation, business, permission, and unknown errors
+fail the run unless the caller supplies a different policy.
+
+Tool side effects are only idempotent when invoked through
+`RunContext.call_tool(...)`. Direct tool calls or external effects inside a
+transition are intentionally treated as unmanaged user code in this first
+runtime slice.
+
+Long runs can use bounded reads and explicit storage policies. By default the
+runner keeps every checkpoint and every inline tool payload for maximum
+inspectability. For larger runs, use `CheckpointPolicy(mode="interval",
+every=N)` to retain only periodic history checkpoints while preserving the
+current resumable state, and `PayloadPolicy(max_inline_bytes=N)` to replace
+large managed tool payloads with hash/size metadata.
 
 The import package remains `loom_agent`; the distribution and CLI are named
 `loom-runner` because `loom-agent` is already occupied by an unrelated package
@@ -54,6 +73,12 @@ runner = AgentRunner(
 ```bash
 loom-runner run examples/counter_agent.py --run-id demo --db runs.sqlite --max-steps 5
 loom-runner resume examples/counter_agent.py --run-id demo --db runs.sqlite --max-steps 100
+loom-runner list examples/counter_agent.py --db runs.sqlite
+loom-runner get examples/counter_agent.py --run-id demo --db runs.sqlite
+loom-runner history examples/counter_agent.py --run-id demo --db runs.sqlite
+loom-runner attempts examples/counter_agent.py --run-id demo --db runs.sqlite --limit 20
+loom-runner tool-calls examples/counter_agent.py --run-id demo --db runs.sqlite --limit 20
+loom-runner explain examples/counter_agent.py --run-id demo --db runs.sqlite
 ```
 
 Add `--trace trace.html` to either command to emit a local `flow-xray` HTML
@@ -71,3 +96,14 @@ python3.13 examples/counter_agent.py
 ```bash
 python3.13 -m pytest
 ```
+
+## Runtime Benchmark
+
+```bash
+python3.13 scripts/bench_runtime.py --steps 100000
+python3.13 scripts/bench_runtime.py --steps 100000 --checkpoint-every 100
+```
+
+The benchmark reports wall time, retained checkpoint rows, attempt rows, DB
+size, and peak Python memory. It is a local regression tool, not a hosted-scale
+performance claim.
