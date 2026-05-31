@@ -22,6 +22,7 @@ Repository = "https://github.com/kroq86/loom-runner"
 Issues = "https://github.com/kroq86/loom-runner/issues"
 "Loom stack" = "https://kroq86.github.io/loom-stack/"
 Documentation = "https://kroq86.github.io/loom-stack/"
+"Official showcase (loom-run)" = "https://github.com/kroq86/loom-run"
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "pytest-asyncio>=0.23"]
