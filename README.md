@@ -1,5 +1,7 @@
 # loom-runner
 
+[![PyPI](https://img.shields.io/pypi/v/loom-runner)](https://pypi.org/project/loom-runner/)
+
 Small durable checkpoint/resume runner for async state-machine loops built on
 top of `loom-tailcalls` and `flow-xray`.
 
