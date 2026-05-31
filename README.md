@@ -12,13 +12,20 @@ inspect history, and explain a run.
 
 ## Loom stack
 
-Composable pieces for long-running agent loops — not a full agent SDK:
+Three composable packages for **long-running async agent loops**. Each does one job; compose them as needed.
+
+| Package | Install | Job |
+| --- | --- | --- |
+| **[loom-tailcalls](https://github.com/kroq86/loom-tailcalls)** | `pip install loom-tailcalls` | Write stack-safe transition loops (`@tailrec`, `@tailstream`) |
+| **[flow-xray](https://github.com/kroq86/flow-xray)** | `pip install flow-xray` | Export local HTML traces (LLM/tool calls, branches, errors) |
+| **[loom-runner](https://github.com/kroq86/loom-runner)** ← **this repo** | `pip install loom-runner` | Checkpoint/resume in SQLite; CLI inspect (`explain`, `history`, …) |
 
 ```text
-loom-tailcalls  stack-safe async transitions
-flow-xray       local HTML traces
-loom-runner     checkpoint/resume + inspect   ← this repo
+@tailrec agent loop  →  loom-runner run/resume  →  --trace trace.html
+     (shape)                  (durability)              (flow-xray)
 ```
+
+**This repo** depends on `loom-tailcalls` and `flow-xray`. It adds persistence and inspection on top of stack-safe loops — not reasoning, planning, memory, or a path to AGI.
 
 ## Who it is for
 
