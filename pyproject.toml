@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "kroq86" }]
+keywords = ["async", "agents", "checkpoint", "sqlite", "state-machine", "durable-execution"]
 dependencies = [
     "loom-tailcalls>=0.2.0",
     "flow-xray>=0.3.0",

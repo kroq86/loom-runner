@@ -10,6 +10,27 @@ full agent SDK. It is the first slice of a Loom-based agent runtime: run a
 typed async transition loop, checkpoint each state transition, resume later,
 inspect history, and explain a run.
 
+## Loom stack
+
+Composable pieces for long-running agent loops — not a full agent SDK:
+
+```text
+loom-tailcalls  stack-safe async transitions
+flow-xray       local HTML traces
+loom-runner     checkpoint/resume + inspect   ← this repo
+```
+
+## Who it is for
+
+- Authors of **long-running async agent loops** who need checkpoint/resume without building their own store
+- Users of **[loom-tailcalls](https://github.com/kroq86/loom-tailcalls)** who want persistence and CLI inspection on top of stack-safe transitions
+- Users of **[flow-xray](https://github.com/kroq86/flow-xray)** who want `--trace trace.html` from the runner CLI
+- Anyone who needs an **inspectable run** (`explain`, `history`, `attempts`, `tool-calls`) rather than a black box
+
+**Not for you** if the agent is a single LLM call, or you already have LangGraph/Temporal (or similar) with persistence you are happy with.
+
+This is not reasoning, planning, memory, or a path to AGI — it is a **durability + observability** primitive for state-machine-shaped agent runtimes.
+
 Runtime transitions are logged as logical steps with attempt history. A retry
 does not create a new transition: for the same `run_id`, `step_index`, and
 stable input hash, the runner reuses the committed outcome. Transient errors
