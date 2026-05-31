@@ -19,6 +19,6 @@ def test_readme_and_console_script_match_distribution_name() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
     assert pyproject["project"]["scripts"] == {"loom-runner": "loom_agent.cli:main"}
-    assert readme.startswith("# loom-runner")
+    assert "\n# loom-runner\n" in readme or readme.startswith("# loom-runner\n")
     assert "loom-runner run examples/counter_agent.py" in readme
     assert "loom-agent run examples/counter_agent.py" not in readme

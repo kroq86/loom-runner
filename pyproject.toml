@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "loom-runner"
-version = "0.1.1"
+version = "0.1.2"
 description = "Durable checkpoint/resume runner for async state-machine loops built on loom-tailcalls."
 readme = "README.md"
 requires-python = ">=3.11"
