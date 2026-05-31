@@ -68,10 +68,35 @@ runtime slice.
 
 Long runs can use bounded reads and explicit storage policies. By default the
 runner keeps every checkpoint and every inline tool payload for maximum
-inspectability. For larger runs, use `CheckpointPolicy(mode="interval",
-every=N)` to retain only periodic history checkpoints while preserving the
-current resumable state, and `PayloadPolicy(max_inline_bytes=N)` to replace
-large managed tool payloads with hash/size metadata.
+inspectability.
+
+### Checkpoint policies
+
+| Mode | `steps` history | `attempts` log | Use when |
+|------|-----------------|----------------|----------|
+| `full` (default) | every step | every attempt | Debugging, short runs |
+| `interval` | every Nth + step 0 | every attempt | Long runs, need sparse step history |
+| `compact` | every step (like full) | failures and retries only | Long deterministic loops (100k+) |
+
+```python
+CheckpointPolicy(mode="compact")  # skip successful single-shot attempt rows
+CheckpointPolicy(mode="interval", every=1000)
+```
+
+`explain` / `loom-runner attempts` on a compact run may show `attempt_count` near zero and note `compact_attempt_log` — that is expected. Idempotency and resume still use `committed_steps` and `runs.state_json`.
+
+`PayloadPolicy(max_inline_bytes=N)` replaces large managed tool payloads with hash/size metadata.
+
+Opening an existing SQLite DB migrates schema v2: redundant indexes on `steps` / `attempts` primary keys are dropped (`pragma user_version = 2`). Run `VACUUM` to reclaim file size.
+
+Benchmark:
+
+```bash
+python scripts/bench_runtime.py --steps 100000 --policy full --db /tmp/full.sqlite
+python scripts/bench_runtime.py --steps 100000 --policy compact --db /tmp/compact.sqlite
+```
+
+`compact` greatly reduces `attempt_rows` and DB size from attempts/indexes; `committed_steps` size is unchanged in v0.1.3.
 
 The import package remains `loom_agent`; the distribution and CLI are named
 `loom-runner` because `loom-agent` is already occupied by an unrelated package

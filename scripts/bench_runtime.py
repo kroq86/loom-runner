@@ -40,12 +40,24 @@ async def step(state: State, ctx: RunContext) -> Continue[State] | Complete[dict
     return Continue(State(state.current + 1, state.target))
 
 
-async def run_bench(*, steps: int, checkpoint_every: int, db_path: Path) -> dict[str, Any]:
-    policy = (
-        CheckpointPolicy()
-        if checkpoint_every == 1
-        else CheckpointPolicy(mode="interval", every=checkpoint_every)
-    )
+def _policy_from_args(policy: str, checkpoint_every: int) -> CheckpointPolicy:
+    if policy == "full":
+        return CheckpointPolicy()
+    if policy == "interval":
+        return CheckpointPolicy(mode="interval", every=checkpoint_every)
+    if policy == "compact":
+        return CheckpointPolicy(mode="compact")
+    raise ValueError(f"unknown policy: {policy}")
+
+
+async def run_bench(
+    *,
+    steps: int,
+    policy: str,
+    checkpoint_every: int,
+    db_path: Path,
+) -> dict[str, Any]:
+    checkpoint_policy = _policy_from_args(policy, checkpoint_every)
     store = SQLiteCheckpointStore(db_path)
     runner = AgentRunner(
         step=step,
@@ -54,7 +66,7 @@ async def run_bench(*, steps: int, checkpoint_every: int, db_path: Path) -> dict
         decode_state=decode_state,
         encode_result=lambda result: result,
         decode_result=lambda result: result,
-        checkpoint_policy=policy,
+        checkpoint_policy=checkpoint_policy,
     )
 
     tracemalloc.start()
@@ -64,13 +76,19 @@ async def run_bench(*, steps: int, checkpoint_every: int, db_path: Path) -> dict
     _, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
 
+    explain_started = time.perf_counter()
+    runner.explain_run("bench")
+    explain_elapsed = time.perf_counter() - explain_started
+
     stats = runner.get_stats("bench")
     store.close()
     return {
         "status": result.status,
+        "policy": policy,
         "steps": steps,
         "checkpoint_every": checkpoint_every,
         "elapsed_seconds": round(elapsed, 4),
+        "explain_seconds": round(explain_elapsed, 4),
         "peak_python_bytes": peak,
         "db_bytes": db_path.stat().st_size,
         "step_rows": stats.step_count,
@@ -82,20 +100,37 @@ async def run_bench(*, steps: int, checkpoint_every: int, db_path: Path) -> dict
 def main() -> int:
     parser = argparse.ArgumentParser(description="Benchmark loom-runner local runtime overhead.")
     parser.add_argument("--steps", type=int, default=100_000)
-    parser.add_argument("--checkpoint-every", type=int, default=1)
+    parser.add_argument(
+        "--policy",
+        choices=("full", "interval", "compact"),
+        default="full",
+        help="Checkpoint policy (interval uses --checkpoint-every)",
+    )
+    parser.add_argument(
+        "--checkpoint-every",
+        type=int,
+        default=1,
+        help="Retain every Nth step checkpoint when --policy=interval",
+    )
     parser.add_argument("--db")
     args = parser.parse_args()
 
     if args.db:
         db_path = Path(args.db)
         result = asyncio.run(
-            run_bench(steps=args.steps, checkpoint_every=args.checkpoint_every, db_path=db_path)
+            run_bench(
+                steps=args.steps,
+                policy=args.policy,
+                checkpoint_every=args.checkpoint_every,
+                db_path=db_path,
+            )
         )
     else:
         with tempfile.TemporaryDirectory() as tmp:
             result = asyncio.run(
                 run_bench(
                     steps=args.steps,
+                    policy=args.policy,
                     checkpoint_every=args.checkpoint_every,
                     db_path=Path(tmp) / "bench.sqlite",
                 )

@@ -176,17 +176,35 @@ class RunVerification:
 
 @dataclass(frozen=True)
 class CheckpointPolicy:
-    mode: Literal["full", "interval"] = "full"
+    mode: Literal["full", "interval", "compact"] = "full"
     every: int = 1
 
     def __post_init__(self) -> None:
-        if self.mode not in {"full", "interval"}:
-            raise ValueError("checkpoint policy mode must be 'full' or 'interval'")
+        if self.mode not in {"full", "interval", "compact"}:
+            raise ValueError(
+                "checkpoint policy mode must be 'full', 'interval', or 'compact'"
+            )
         if self.every < 1:
             raise ValueError("checkpoint policy every must be >= 1")
 
     def should_retain(self, step_index: int) -> bool:
-        return self.mode == "full" or step_index == 0 or step_index % self.every == 0
+        if self.mode == "interval":
+            return step_index == 0 or step_index % self.every == 0
+        return True
+
+    def should_persist_attempt(self, *, attempt_index: int, status: str) -> bool:
+        if self.mode != "compact":
+            return True
+        if status == "failed":
+            return True
+        if attempt_index > 0:
+            return True
+        return False
+
+    def should_persist_attempt_started(self, *, attempt_index: int) -> bool:
+        if self.mode != "compact":
+            return True
+        return attempt_index > 0
 
 
 @dataclass(frozen=True)
@@ -315,7 +333,9 @@ class AgentRunner(Generic[S, R]):
         stored = self.store.get_run(run_id)
         notes: list[str] = []
 
-        if self.checkpoint_policy.mode == "full" and self.store.has_step_gaps(run_id):
+        if self.checkpoint_policy.mode in {"full", "compact"} and self.store.has_step_gaps(
+            run_id
+        ):
             notes.append("step_gap")
 
         if stored.status == "completed":
@@ -332,7 +352,9 @@ class AgentRunner(Generic[S, R]):
         else:
             notes.append("unknown_run_status")
 
-        if self.store.has_attempt_gaps(run_id):
+        if self.checkpoint_policy.mode != "compact" and self.store.has_attempt_gaps(
+            run_id
+        ):
             notes.append("attempt_gap")
 
         return RunVerification(run_id=run_id, valid=not notes, notes=tuple(notes))
@@ -342,6 +364,9 @@ class AgentRunner(Generic[S, R]):
         decoded = self._decode_stored_run(stored)
         stats = self.get_stats(run_id)
         verification = self.verify_run(run_id)
+        notes = list(verification.notes)
+        if self.checkpoint_policy.mode == "compact":
+            notes.append("compact_attempt_log")
         return RunExplanation(
             run_id=stored.run_id,
             status=stored.status,
@@ -351,7 +376,7 @@ class AgentRunner(Generic[S, R]):
             retry_count=stats.retry_count,
             tool_call_count=stats.tool_call_count,
             last_error_category=stats.last_error_category,
-            invariant_notes=verification.notes,
+            invariant_notes=tuple(notes),
             state=decoded.state,
             result=decoded.result,
             error=stored.error,
@@ -399,12 +424,15 @@ class AgentRunner(Generic[S, R]):
 
         attempt_index = 0
         while True:
-            self.store.record_attempt_started(
-                run_id=cursor.run_id,
-                step_index=cursor.step_index,
-                attempt_index=attempt_index,
-                input_hash=input_hash,
-            )
+            if self.checkpoint_policy.should_persist_attempt_started(
+                attempt_index=attempt_index
+            ):
+                self.store.record_attempt_started(
+                    run_id=cursor.run_id,
+                    step_index=cursor.step_index,
+                    attempt_index=attempt_index,
+                    input_hash=input_hash,
+                )
             try:
                 outcome = await self._step_once(
                     cursor,
@@ -417,17 +445,21 @@ class AgentRunner(Generic[S, R]):
                     )
 
                 outcome_kind, state_json, result_json = self._encode_outcome(outcome)
-                self.store.record_attempt_finished(
-                    run_id=cursor.run_id,
-                    step_index=cursor.step_index,
+                if self.checkpoint_policy.should_persist_attempt(
                     attempt_index=attempt_index,
                     status="completed",
-                    outcome_kind=outcome_kind,
-                    output_json=state_json if outcome_kind == "continue" else result_json,
-                    error=None,
-                    error_category=None,
-                    is_retryable=None,
-                )
+                ):
+                    self.store.record_attempt_finished(
+                        run_id=cursor.run_id,
+                        step_index=cursor.step_index,
+                        attempt_index=attempt_index,
+                        status="completed",
+                        outcome_kind=outcome_kind,
+                        output_json=state_json if outcome_kind == "continue" else result_json,
+                        error=None,
+                        error_category=None,
+                        is_retryable=None,
+                    )
                 self.store.commit_step_outcome(
                     run_id=cursor.run_id,
                     step_index=cursor.step_index,
@@ -444,17 +476,30 @@ class AgentRunner(Generic[S, R]):
                 retryable = error_is_retryable and self.retry_policy.should_retry(
                     category, attempt_index
                 )
-                self.store.record_attempt_finished(
-                    run_id=cursor.run_id,
-                    step_index=cursor.step_index,
+                if self.checkpoint_policy.should_persist_attempt(
                     attempt_index=attempt_index,
                     status="failed",
-                    outcome_kind=None,
-                    output_json=None,
-                    error=f"{exc.__class__.__name__}: {exc}",
-                    error_category=category.value,
-                    is_retryable=error_is_retryable,
-                )
+                ):
+                    if not self.checkpoint_policy.should_persist_attempt_started(
+                        attempt_index=attempt_index
+                    ):
+                        self.store.record_attempt_started(
+                            run_id=cursor.run_id,
+                            step_index=cursor.step_index,
+                            attempt_index=attempt_index,
+                            input_hash=input_hash,
+                        )
+                    self.store.record_attempt_finished(
+                        run_id=cursor.run_id,
+                        step_index=cursor.step_index,
+                        attempt_index=attempt_index,
+                        status="failed",
+                        outcome_kind=None,
+                        output_json=None,
+                        error=f"{exc.__class__.__name__}: {exc}",
+                        error_category=category.value,
+                        is_retryable=error_is_retryable,
+                    )
                 if retryable:
                     attempt_index += 1
                     continue

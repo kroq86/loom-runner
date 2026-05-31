@@ -183,6 +183,9 @@ class CheckpointStore(Protocol):
     def has_attempt_gaps(self, run_id: str) -> bool: ...
 
 
+_SCHEMA_VERSION = 2
+
+
 class SQLiteCheckpointStore:
     """SQLite-backed checkpoint store for JSON-encoded run state."""
 
@@ -920,22 +923,18 @@ class SQLiteCheckpointStore:
             )
             conn.execute(
                 """
-                create index if not exists idx_steps_run_step
-                on steps(run_id, step_index)
-                """
-            )
-            conn.execute(
-                """
-                create index if not exists idx_attempts_run_step_attempt
-                on attempts(run_id, step_index, attempt_index)
-                """
-            )
-            conn.execute(
-                """
                 create index if not exists idx_tool_calls_run_step_attempt
                 on tool_calls(run_id, step_index, attempt_index)
                 """
             )
+            self._migrate_schema(conn)
+
+    def _migrate_schema(self, conn: sqlite3.Connection) -> None:
+        version = int(conn.execute("pragma user_version").fetchone()[0])
+        if version < _SCHEMA_VERSION:
+            conn.execute("drop index if exists idx_steps_run_step")
+            conn.execute("drop index if exists idx_attempts_run_step_attempt")
+            conn.execute(f"pragma user_version = {_SCHEMA_VERSION}")
 
 
 def _now() -> str:
