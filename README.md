@@ -1,9 +1,10 @@
 # loom-runner
 
 [![PyPI](https://img.shields.io/pypi/v/loom-runner)](https://pypi.org/project/loom-runner/)
+[![Loom stack](https://img.shields.io/badge/docs-loom--stack-8B7355)](https://kroq86.github.io/loom-stack/)
 
 Small durable checkpoint/resume runner for async state-machine loops built on
-top of `loom-tailcalls` and `flow-xray`.
+top of `loom-tailcalls` and `flow-xray`. **Full stack overview:** [kroq86.github.io/loom-stack](https://kroq86.github.io/loom-stack/)
 
 This is not a planner, memory system, graph DSL, hosted tracing product, or
 full agent SDK. It is the first slice of a Loom-based agent runtime: run a
@@ -11,6 +12,8 @@ typed async transition loop, checkpoint each state transition, resume later,
 inspect history, and explain a run.
 
 ## Loom stack
+
+**Overview:** [kroq86.github.io/loom-stack](https://kroq86.github.io/loom-stack/) — packages, flow, audience, quick start.
 
 Three composable packages for **long-running async agent loops**. Each does one job; compose them as needed.
 
